@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="{{csp}}">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Campus</title>
+<link rel="stylesheet" href="{{style}}">
+</head>
+<body>
+<header class="toolbar">
+  <span class="studio-icon" aria-hidden="true">⌘</span>
+  <div class="heading">
+    <div class="title-line"><h1 id="title">Agent Campus</h1><span id="status" class="badge" role="status"></span></div>
+    <p id="metadata"></p>
+  </div>
+  <button id="attention" class="attention" hidden></button>
+  <div class="switcher" role="group" aria-label="View">
+    <button id="studio" type="button">▦ Studio</button>
+    <button id="list" type="button">☷ List</button>
+  </div>
+</header>
+<main id="workspace">
+  <div id="stage">
+    <div id="scene"><div class="campus-frame"><div id="campus-map"><img id="campus" src="{{art}}" alt=""><div id="markers" aria-label="Agents on campus"></div></div></div><div id="agents" aria-label="Agents"></div></div>
+    <div class="map-tools">
+      <div class="legend"><span class="working">Working</span><span class="waiting">Waiting</span><span class="failed">Needs attention</span></div>
+      <div class="zoom" role="group" aria-label="Map zoom">
+        <button id="fit" type="button">⛶ Fit</button>
+        <button id="minus" type="button" aria-label="Zoom out">−</button>
+        <button id="plus" type="button" aria-label="Zoom in">+</button>
+      </div>
+    </div>
+  </div>
+  <aside id="inspector" aria-label="Selected agent" hidden></aside>
+</main>
+<details id="activity">
+  <summary><span>Activity</span><span id="event-count"></span><span id="ticks" aria-hidden="true"></span></summary>
+  <ol id="timeline"></ol>
+</details>
+<script src="{{script}}"></script>
+</body>
+</html>

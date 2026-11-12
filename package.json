@@ -1,0 +1,32 @@
+{
+  "name": "agent-campus",
+  "displayName": "Agent Campus",
+  "version": "0.0.1",
+  "private": true,
+  "engines": { "vscode": "^1.95.0" },
+  "main": "./src/extension.cjs",
+  "activationEvents": ["onStartupFinished"],
+  "extensionKind": ["workspace"],
+  "capabilities": { "untrustedWorkspaces": { "supported": false } },
+  "contributes": {
+    "commands": [
+      { "command": "agentWorkspace.start", "title": "Agent Campus: Start Run" },
+      { "command": "agentWorkspace.stop", "title": "Agent Campus: Stop Run" }
+    ],
+    "configuration": {
+      "title": "Agent Campus",
+      "properties": {
+        "agentWorkspace.codexExecutable": {
+          "type": "string",
+          "default": "codex",
+          "scope": "machine",
+          "description": "Codex CLI executable name or absolute path on the extension host."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "check": "node --check src/client.cjs && node --check src/extension.cjs && node --check src/activity.cjs && node --check src/ide-sessions.cjs && node --check media/panel.js",
+    "smoke": "node scripts/smoke.cjs"
+  }
+}
