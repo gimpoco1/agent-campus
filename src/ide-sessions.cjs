@@ -37,7 +37,7 @@ function applyEvent(run, meta, event) {
   if (payload.type === 'task_started' && threadId !== run.rootId) {
     const nickname = meta.agent_nickname;
     const next = reduceActivity(run, 'item/completed', {
-      threadId, item: { type: 'subAgentActivity', agentThreadId: threadId, kind: 'started' }
+      threadId, item: { type: 'subAgentActivity', agentThreadId: threadId, kind: 'started', parentThreadId: meta.parent_thread_id }
     });
     return typeof nickname === 'string' && nickname.trim()
       ? { ...next, agents: next.agents.map(agent => agent.id === threadId ? { ...agent, label: nickname } : agent) }
@@ -45,32 +45,59 @@ function applyEvent(run, meta, event) {
   }
   if (payload.type === 'task_complete' || payload.type === 'turn_aborted') {
     const status = payload.type === 'task_complete' ? 'completed' : 'interrupted';
-    return reduceActivity(run, 'turn/completed', { threadId, turn: { status } });
+    const next = typeof payload.last_agent_message === 'string'
+      ? reduceActivity(run, 'item/completed', {
+        threadId, item: { type: 'agentMessage', text: payload.last_agent_message, phase: 'final_answer' }
+      }) : run;
+    return reduceActivity(next, 'turn/completed', { threadId, turn: { status } });
   }
-  if (payload.type === 'user_message' && threadId === run.rootId && typeof payload.message === 'string') {
-    return { ...run, agents: run.agents.map(agent =>
-      agent.id === threadId ? { ...agent, assignment: payload.message } : agent) };
+  if (payload.type === 'user_message' && typeof payload.message === 'string' &&
+      (threadId === run.rootId || (payload.thread_id === threadId &&
+        typeof meta.parent_thread_id === 'string' && run.agents.some(agent => agent.id === threadId)))) {
+    if (threadId === run.rootId) {
+      return { ...run, agents: run.agents.map(agent =>
+        agent.id === threadId ? { ...agent, assignment: payload.message } : agent) };
+    }
+    return reduceActivity(run, 'item/completed', {
+      threadId, item: {
+        type: 'agentAssignment', id: payload.item_id, text: payload.message,
+        parentThreadId: meta.parent_thread_id
+      }
+    });
   }
   if (payload.type === 'agent_message' && typeof payload.message === 'string') {
-    return reduceActivity(run, 'item/completed', { threadId, item: { type: 'agentMessage', text: payload.message } });
+    return reduceActivity(run, 'item/completed', { threadId, item: { type: 'agentMessage', text: payload.message, phase: payload.phase } });
   }
-  if (payload.type !== 'item_completed') return run;
+  if (payload.type !== 'item_completed' && payload.type !== 'item_started') return run;
   const item = payload.item;
   if (item?.type === 'UserMessage' || item?.type === 'AgentMessage') {
+    if (payload.type !== 'item_completed') return run;
     if (!Array.isArray(item.content)) throw new TypeError('Codex chat message lacks content.');
     const text = item.content.filter(part => typeof part?.text === 'string').map(part => part.text).join('\n');
     return applyEvent(run, meta, {
       type: 'event_msg',
-      payload: item.type === 'UserMessage' ? { type: 'user_message', message: text } : { type: 'agent_message', message: text }
+      payload: item.type === 'UserMessage' ? { type: 'user_message', message: text, thread_id: payload.thread_id, item_id: item.id } : { type: 'agent_message', message: text, phase: item.phase }
     });
   }
-  const types = { SubAgentActivity: 'subAgentActivity', CommandExecution: 'commandExecution', FileChange: 'fileChange' };
+  if (item?.type === 'Reasoning') {
+    if (payload.type !== 'item_completed') return run;
+    if (!Array.isArray(item.summary_text) || !item.summary_text.every(part => typeof part === 'string')) {
+      throw new TypeError('Codex reasoning summary lacks a string array in summary_text.');
+    }
+    return reduceActivity(run, 'item/completed', {
+      threadId, item: { type: 'reasoning', id: item.id, summary: item.summary_text }
+    });
+  }
+  const types = { SubAgentActivity: 'subAgentActivity', CommandExecution: 'commandExecution', FileChange: 'fileChange', CollabAgentToolCall: 'collabAgentToolCall' };
   if (!item || !Object.hasOwn(types, item.type)) return run;
-  return reduceActivity(run, 'item/completed', {
+  return reduceActivity(run, payload.type === 'item_started' ? 'item/started' : 'item/completed', {
     threadId,
     item: {
       ...item, type: types[item.type], agentThreadId: item.agent_thread_id,
+      parentThreadId: meta.parent_thread_id,
       exitCode: item.exit_code, aggregatedOutput: item.aggregated_output,
+      senderThreadId: item.sender_thread_id, receiverThreadIds: item.receiver_thread_ids,
+      agentsStates: item.agents_states,
       ...(item.type === 'FileChange' && item.changes && !Array.isArray(item.changes)
         ? { changes: Object.keys(item.changes).map(path => ({ path })) } : {})
     }
@@ -115,7 +142,7 @@ function observeIdeSessions(folders, onRun, onError) {
       if (meta.source === 'vscode' && !meta.parent_thread_id && matchesWorkspace(meta, folders) &&
           event.type === 'event_msg' && payload?.type === 'task_started' &&
           typeof payload.turn_id === 'string' && at >= runStartedAt) {
-        run = startRun(meta.id, '');
+        run = { ...startRun(meta.id, ''), turnId: payload.turn_id, workspacePath: resolve(meta.cwd) };
         turnId = payload.turn_id;
         runStartedAt = at;
         family.clear();

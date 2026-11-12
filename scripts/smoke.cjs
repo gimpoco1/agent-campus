@@ -31,6 +31,9 @@ async function smoke() {
       await completed;
       assert.equal(run.status, 'completed', run.timeline.at(-1)?.text);
       assert.ok(run.agents.length >= 3, `Expected a lead and two observed subagents, saw ${run.agents.length} agents.`);
+      assert.ok(run.handoffs.some(handoff => handoff.kind === 'assignment'), 'Expected an observed task assignment.');
+      assert.ok(run.handoffs.some(handoff => handoff.kind === 'result'), 'Expected an observed subagent result handoff.');
+      assert.ok(run.agents.some(agent => agent.id !== run.rootId && agent.result.trim()), 'Expected a recorded subagent result, not only a completion signal.');
       console.log(`Completed a live run with ${run.agents.length - 1} observed subagents.`);
     }
   } finally {

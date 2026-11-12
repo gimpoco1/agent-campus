@@ -26,7 +26,8 @@
     }
   },
   "scripts": {
-    "check": "node --check src/client.cjs && node --check src/extension.cjs && node --check src/activity.cjs && node --check src/ide-sessions.cjs && node --check media/panel.js",
+    "test": "node scripts/activity-test.cjs",
+    "check": "node --check src/client.cjs && node --check src/extension.cjs && node --check src/activity.cjs && node --check src/ide-sessions.cjs && node --check media/campus.js && node --check media/panel.js",
     "smoke": "node scripts/smoke.cjs"
   }
 }

@@ -16,13 +16,15 @@
   </div>
   <button id="attention" class="attention" hidden></button>
   <div class="switcher" role="group" aria-label="View">
-    <button id="studio" type="button">▦ Studio</button>
+    <button id="studio" type="button">▦ Campus</button>
     <button id="list" type="button">☷ List</button>
   </div>
 </header>
+<details id="run-summary" aria-label="Run summary" hidden><summary id="summary-toggle"></summary><div id="summary-content"></div></details>
 <main id="workspace">
   <div id="stage">
-    <div id="scene"><div class="campus-frame"><div id="campus-map"><img id="campus" src="{{art}}" alt=""><div id="markers" aria-label="Agents on campus"></div></div></div><div id="agents" aria-label="Agents"></div></div>
+    <div id="handoff-status" role="status" aria-live="polite"></div>
+    <div id="scene"><div class="campus-frame"><div id="campus-map"><img id="campus" src="{{art}}" alt=""><div id="workstations" aria-label="Agent workstations"></div><div id="markers" aria-label="Agents on campus"></div></div></div><div id="agents" aria-label="Agents"></div></div>
     <div class="map-tools">
       <div class="legend"><span class="working">Working</span><span class="waiting">Waiting</span><span class="failed">Needs attention</span></div>
       <div class="zoom" role="group" aria-label="Map zoom">
@@ -38,6 +40,7 @@
   <summary><span>Activity</span><span id="event-count"></span><span id="ticks" aria-hidden="true"></span></summary>
   <ol id="timeline"></ol>
 </details>
+<script src="{{campusScript}}"></script>
 <script src="{{script}}"></script>
 </body>
 </html>

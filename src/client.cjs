@@ -26,6 +26,12 @@ class CodexClient {
     this.pending = new Map();
     this.nextId = 0;
     this.closed = false;
+    this.notifications = Promise.resolve();
+    this.rootThreadId = '';
+    /** @type {Set<string>} */
+    this.rootTurnIds = new Set();
+    /** @type {Map<string, string>} */
+    this.observedItems = new Map();
     let diagnostics = '';
     this.process.stderr.setEncoding('utf8').on('data', (chunk) => {
       diagnostics = (diagnostics + chunk).slice(-4000);
@@ -48,7 +54,19 @@ class CodexClient {
           if (message.id !== undefined) {
             throw new CodexProtocolError(`Codex requested ${message.method}. This read-only prototype cannot answer it, so the run stopped.`);
           }
-          onEvent(message.method, message.params);
+          const method = message.method;
+          const params = record(message.params);
+          this.notifications = this.notifications.then(async () => {
+            if (this.closed) return;
+            if (method === 'turn/started' && params.threadId === this.rootThreadId) {
+              this.rootTurnIds.add(string(record(params.turn).id));
+            }
+            if ((method === 'item/started' || method === 'item/completed') &&
+                record(params.item).type === 'subAgentActivity') {
+              await this.readSubagent(record(params.item), onEvent);
+            }
+            if (!this.closed) onEvent(method, params);
+          }).catch(error => fail(error instanceof Error ? error : new CodexProtocolError(String(error))));
           return;
         }
         if (typeof message.id !== 'number') throw new CodexProtocolError('Codex returned a response without a numeric request ID.');
@@ -65,6 +83,61 @@ class CodexClient {
         fail(error instanceof Error ? error : new CodexProtocolError(String(error)));
       }
     });
+  }
+
+  /** @param {object} activity @param {(method: string, params: object) => void} onEvent */
+  async readSubagent(activity, onEvent) {
+    const observed = record(activity);
+    const threadId = string(observed.agentThreadId);
+    const response = record(await this.request('thread/read', { threadId, includeTurns: true }));
+    if (this.closed) return;
+    const thread = record(response.thread);
+    if (thread.id !== threadId) throw new CodexProtocolError(`thread/read returned a different thread for subagent ${threadId}.`);
+    const parentThreadId = string(thread.parentThreadId);
+    if (!Array.isArray(thread.turns)) throw new CodexProtocolError(`thread/read lacks turns for subagent ${threadId}.`);
+    onEvent('item/completed', {
+      threadId, item: {
+        type: 'subAgentActivity', agentThreadId: threadId, parentThreadId,
+        agentNickname: thread.agentNickname, kind: 'interacted'
+      }
+    });
+    if (observed.kind === 'started') {
+      onEvent('item/completed', {
+        threadId, item: { ...observed, parentThreadId, agentNickname: thread.agentNickname }
+      });
+    }
+    const latest = thread.turns.at(-1);
+    if (!latest) return;
+    const turn = record(latest);
+    if (this.rootTurnIds.has(string(turn.id))) return;
+    if (!Array.isArray(turn.items)) throw new CodexProtocolError(`thread/read lacks items for subagent ${threadId}, turn ${string(turn.id)}.`);
+    for (const value of turn.items) {
+      const item = record(value);
+      const type = string(item.type);
+      if (!['userMessage', 'agentMessage', 'reasoning', 'commandExecution', 'fileChange'].includes(type)) continue;
+      let normalized;
+      if (type === 'userMessage') {
+        if (!Array.isArray(item.content)) throw new CodexProtocolError(`Subagent ${threadId} assignment lacks content.`);
+        const text = item.content.map(part => record(part)).filter(part => part.type === 'text')
+          .map(part => string(part.text)).join('\n');
+        if (!text.trim()) continue;
+        normalized = { type: 'agentAssignment', id: item.id, text, parentThreadId };
+      } else if (type === 'reasoning') {
+        if (!Array.isArray(item.summary) || !item.summary.every(part => typeof part === 'string')) {
+          throw new CodexProtocolError(`Subagent ${threadId} reasoning summary is not a string array.`);
+        }
+        normalized = { type, id: item.id, summary: item.summary };
+      } else {
+        normalized = item;
+      }
+      const key = `${threadId}:${string(item.id)}`;
+      const signature = JSON.stringify(normalized);
+      if (this.observedItems.get(key) === signature) continue;
+      this.observedItems.set(key, signature);
+      onEvent(['commandExecution', 'fileChange'].includes(type) && item.status === 'inProgress' ? 'item/started' : 'item/completed', {
+        threadId, item: normalized
+      });
+    }
   }
 
   /** @param {object} message */
@@ -99,7 +172,8 @@ class CodexClient {
     const result = record(await this.request('thread/start', {
       cwd, sandbox: 'read-only', approvalPolicy: 'never'
     }));
-    return string(record(result.thread).id);
+    this.rootThreadId = string(record(result.thread).id);
+    return this.rootThreadId;
   }
 
   /** @param {string} threadId @param {string} prompt */

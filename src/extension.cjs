@@ -1,5 +1,6 @@
 const vscode = require('vscode');
 const { readFileSync } = require('node:fs');
+const { resolve, relative, isAbsolute, sep } = require('node:path');
 const { CodexClient } = require('./client.cjs');
 const { startRun, reduceActivity } = require('./activity.cjs');
 const { observeIdeSessions } = require('./ide-sessions.cjs');
@@ -9,6 +10,56 @@ function activate(context) {
   let panel;
   let client;
   let state = { status: 'Ready', run: null };
+  const revisions = new Map();
+  let revisionId = 0;
+  context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider('agent-campus-review', {
+    provideTextDocumentContent: uri => {
+      if (!revisions.has(uri.toString())) throw new Error(`Review content is no longer available: ${uri.path}`);
+      return revisions.get(uri.toString());
+    }
+  }));
+
+  async function reviewFile(message) {
+    if (!message || !['openFile', 'reviewDiff'].includes(message.type) || typeof message.path !== 'string') {
+      throw new TypeError('File review requires an action and an observed file path.');
+    }
+    const run = state.run;
+    if (!run?.workspacePath || !run.changedFiles.some(file => file.path === message.path)) {
+      throw new Error(`Cannot review a file outside the observed run: ${message.path}`);
+    }
+    const root = resolve(run.workspacePath);
+    const path = resolve(root, message.path);
+    const local = relative(root, path);
+    if (local === '..' || local.startsWith(`..${sep}`) || isAbsolute(local)) {
+      throw new Error(`Observed file is outside the run workspace: ${message.path}`);
+    }
+    const uri = vscode.Uri.file(path);
+    if (message.type === 'openFile') {
+      await vscode.window.showTextDocument(uri, { preview: true });
+      return;
+    }
+    const git = vscode.extensions.getExtension('vscode.git');
+    if (!git) throw new Error('Enable the built-in Git extension to review file differences.');
+    const api = (await git.activate()).getAPI(1);
+    const repository = api.getRepository(uri);
+    if (!repository) throw new Error(`No Git repository found for ${path}.`);
+    const repoPath = relative(repository.rootUri.fsPath, path).split(sep).join('/');
+    // An added file has no HEAD revision; its review starts with an empty document.
+    const object = await repository.getObjectDetails('HEAD', repoPath).catch(error => {
+      if (error.gitErrorCode === 'UnknownPath') return null;
+      throw error;
+    });
+    const content = object ? await repository.show('HEAD', repoPath) : '';
+    const before = vscode.Uri.from({ scheme: 'agent-campus-review', path: `/${++revisionId}/${repoPath}` });
+    revisions.set(before.toString(), content);
+    const exists = await vscode.workspace.fs.stat(uri).then(() => true, error => {
+      if (error.code === 'FileNotFound') return false;
+      throw error;
+    });
+    const after = exists ? uri : vscode.Uri.from({ scheme: 'agent-campus-review', path: `/${++revisionId}/${repoPath}` });
+    if (!exists) revisions.set(after.toString(), '');
+    await vscode.commands.executeCommand('vscode.diff', before, after, `${repoPath} · HEAD ↔ working tree`);
+  }
 
   function publish(next) {
     state = next;
@@ -35,12 +86,13 @@ function activate(context) {
     const source = panel.webview.cspSource;
     const resources = {
       csp: `default-src 'none'; script-src ${source}; style-src ${source} 'unsafe-inline'; img-src ${source}`,
-      style: uri('panel.css'), script: uri('panel.js'), art: uri('campus.jpg')
+      style: uri('panel.css'), script: uri('panel.js'), campusScript: uri('campus.js'), art: uri('campus.jpg')
     };
     const template = readFileSync(vscode.Uri.joinPath(media, 'panel.html').fsPath, 'utf8');
     panel.webview.html = template.replace(/{{(\w+)}}/g, (_token, key) => resources[key]);
     panel.webview.onDidReceiveMessage(message => {
       if (message === 'ready') void panel.webview.postMessage(state);
+      else void reviewFile(message).catch(error => vscode.window.showErrorMessage(`Agent Campus file review failed: ${error.message}`));
     });
     panel.onDidDispose(() => { panel = undefined; });
   }
@@ -89,6 +141,7 @@ function activate(context) {
       const threadId = await connection.startThread(folder.uri.fsPath);
       if (client !== connection) return;
       run = startRun(threadId, prompt.trim());
+      run = { ...run, workspacePath: folder.uri.fsPath };
       publish({ status: run.status, run });
       await connection.startTurn(threadId, prompt.trim());
     } catch (error) {
