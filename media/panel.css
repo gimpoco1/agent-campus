@@ -184,3 +184,9 @@ h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 
   @keyframes robot-step { to { transform: translateY(-3px); } }
   @keyframes robot-type { to { transform: rotate(-35deg); } }
 }
+
+.run-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+.run-controls select { flex: 1; min-width: 120px; max-width: 100%; font: inherit; color: var(--ink); background: var(--paper); }
+.run-controls button, .run-controls select { border: 1px solid var(--line); border-radius: 5px; padding: 5px 8px; }
+.run-controls button { background: var(--surface); }
+.run-controls button:disabled { opacity: .5; cursor: default; }

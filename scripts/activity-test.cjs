@@ -129,3 +129,12 @@ const lateStart = reduceActivity(beforeStartComplete, 'item/completed', { thread
 assert.equal(lateStart.agents.find(agent => agent.id === 'child').status, 'completed');
 assert.equal(lateStart.handoffs.filter(handoff => handoff.kind === 'result').length, 1);
 assert.equal(lateStart.handoffs.filter(handoff => handoff.kind === 'assignment').length, 1);
+
+const { formatReport } = require('../src/report.cjs');
+const report = formatReport(finished);
+assert.ok(report.includes('Feature ready'));
+assert.ok(report.includes('src/feature.js (Lead agent)'));
+assert.ok(report.includes('failed (resolved by retry); exit 1'));
+assert.ok(report.includes('All tests passed'));
+assert.ok(formatReport(initial).includes('Checks have not been verified here.'));
+console.log('Run reports preserve results, file attribution, and command evidence.');

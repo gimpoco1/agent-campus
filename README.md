@@ -32,7 +32,9 @@ To install a packaged release before it is available in the Marketplace:
 2. Open a trusted local workspace. If you installed Codex after Agent Campus was activated, run **Developer: Reload Window** from the Command Palette.
 3. Send a new message in the Codex sidebar. Agent Campus opens beside the editor when the new turn is recorded, leaving focus in the chat. There is no separate command to start observation.
 
-Agent Campus observes the latest turn that starts in the workspace by reading the official extension’s local session records. Their format may change with Codex updates. Disable Agent Campus in VS Code to stop automatic opening.
+Agent Campus observes the latest turn that starts in the workspace by reading the official extension’s local session records. Their format may change with Codex updates. Turn off `agentWorkspace.autoOpen` to keep observing without automatically opening the panel. Run **Agent Campus: Open Campus** to open it at any time.
+
+Use the run selector to revisit the last 20 observed runs in the current VS Code window, or choose **Follow latest run** to follow new turns. Recent runs remain available after closing and reopening the panel; reloading the window clears them. **Copy report** copies the selected run’s assignments, results, changed files, and command evidence to the clipboard. The panel also provides controls to start a read-only standalone run and stop it.
 
 ## Run a standalone demo
 

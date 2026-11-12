@@ -20,6 +20,13 @@
     <button id="list" type="button">☷ List</button>
   </div>
 </header>
+<nav class="run-controls" aria-label="Run controls">
+  <label for="recent-runs">Run</label>
+  <select id="recent-runs" aria-label="Recent runs"><option value="">Follow latest run</option></select>
+  <button id="copy-report" type="button" disabled>Copy report</button>
+  <button id="start-run" type="button">Start read-only run</button>
+  <button id="stop-run" type="button" hidden>Stop standalone run</button>
+</nav>
 <details id="run-summary" aria-label="Run summary" hidden><summary id="summary-toggle"></summary><div id="summary-content"></div></details>
 <main id="workspace">
   <div id="stage">

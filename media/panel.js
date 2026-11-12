@@ -1,6 +1,6 @@
 const vscode = acquireVsCodeApi();
 const ui = Object.fromEntries(
-  ['title', 'status', 'metadata', 'attention', 'workspace', 'stage', 'studio', 'list', 'agents',
+  ['recent-runs', 'copy-report', 'start-run', 'stop-run', 'title', 'status', 'metadata', 'attention', 'workspace', 'stage', 'studio', 'list', 'agents',
     'run-summary', 'summary-toggle', 'summary-content', 'handoff-status', 'workstations', 'inspector', 'campus', 'campus-map', 'markers', 'timeline', 'ticks', 'event-count', 'fit', 'minus', 'plus']
     .map(id => [id, document.getElementById(id)])
 );
@@ -217,6 +217,12 @@ function render() {
   ui.studio.setAttribute('aria-pressed', String(mode === 'studio'));
   ui.list.setAttribute('aria-pressed', String(mode === 'list'));
   const run = state.run;
+  ui['recent-runs'].replaceChildren(new Option('Follow latest run', ''), ...(state.recentRuns ?? []).map(entry =>
+    new Option(`${entry.status} · ${entry.label}`, entry.id)));
+  ui['recent-runs'].value = state.selectedRunId ?? '';
+  ui['copy-report'].disabled = !run;
+  ui['start-run'].disabled = Boolean(state.canStop);
+  ui['stop-run'].hidden = !state.canStop;
   const events = run?.timeline ?? [];
   const agents = (run?.agents ?? []).map((agent, index) => {
     const activity = events.filter(event => event.agentId === agent.id);
@@ -304,6 +310,10 @@ ui['run-summary'].addEventListener('toggle', event => {
   if (event.target === ui['run-summary'] && fitMode && view !== 'list') fitCampus();
   if (event.target.isConnected && event.target.dataset.section) summaryExpansion.set(event.target.dataset.section, event.target.open);
 }, true);
+ui['recent-runs'].addEventListener('change', () => vscode.postMessage({ type: 'selectRun', id: ui['recent-runs'].value }));
+ui['start-run'].addEventListener('click', () => vscode.postMessage({ type: 'start' }));
+ui['stop-run'].addEventListener('click', () => vscode.postMessage({ type: 'stop' }));
+ui['copy-report'].addEventListener('click', () => vscode.postMessage({ type: 'copyReport' }));
 ui.studio.addEventListener('click', () => selectView('studio'));
 ui.list.addEventListener('click', () => selectView('list'));
 ui.fit.addEventListener('click', fitCampus);

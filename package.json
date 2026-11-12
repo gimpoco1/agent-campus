@@ -42,6 +42,10 @@
   "contributes": {
     "commands": [
       {
+        "command": "agentWorkspace.open",
+        "title": "Agent Campus: Open Campus"
+      },
+      {
         "command": "agentWorkspace.start",
         "title": "Agent Campus: Start Run"
       },
@@ -58,6 +62,11 @@
           "default": "codex",
           "scope": "machine",
           "description": "Codex CLI executable name or absolute path on the extension host."
+        },
+        "agentWorkspace.autoOpen": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open Agent Campus automatically when a new Codex chat turn starts."
         }
       }
     }
@@ -65,7 +74,7 @@
   "scripts": {
     "package": "npm test && npm run check && vsce package",
     "test": "node scripts/activity-test.cjs",
-    "check": "node --check src/client.cjs && node --check src/extension.cjs && node --check src/activity.cjs && node --check src/ide-sessions.cjs && node --check media/campus.js && node --check media/panel.js",
+    "check": "node --check src/report.cjs && node --check src/client.cjs && node --check src/extension.cjs && node --check src/activity.cjs && node --check src/ide-sessions.cjs && node --check media/campus.js && node --check media/panel.js",
     "smoke": "node scripts/smoke.cjs"
   },
   "devDependencies": {

@@ -3,6 +3,7 @@ const { readFileSync } = require('node:fs');
 const { resolve, relative, isAbsolute, sep } = require('node:path');
 const { CodexClient } = require('./client.cjs');
 const { startRun, reduceActivity } = require('./activity.cjs');
+const { formatReport } = require('./report.cjs');
 const { observeIdeSessions } = require('./ide-sessions.cjs');
 
 /** @param {import('vscode').ExtensionContext} context */
@@ -10,6 +11,8 @@ function activate(context) {
   let panel;
   let client;
   let state = { status: 'Ready', run: null };
+  const recentRuns = new Map();
+  let selectedRunId;
   const revisions = new Map();
   let revisionId = 0;
   context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider('agent-campus-review', {
@@ -19,11 +22,18 @@ function activate(context) {
     }
   }));
 
+  async function copyReport() {
+    const run = selectedRunId ? recentRuns.get(selectedRunId)?.run : state.run;
+    if (!run) throw new Error('Select an observed run before copying a report.');
+    await vscode.env.clipboard.writeText(formatReport(run));
+    void vscode.window.showInformationMessage('Agent Campus report copied to clipboard.');
+  }
+
   async function reviewFile(message) {
     if (!message || !['openFile', 'reviewDiff'].includes(message.type) || typeof message.path !== 'string') {
       throw new TypeError('File review requires an action and an observed file path.');
     }
-    const run = state.run;
+    const run = selectedRunId ? recentRuns.get(selectedRunId)?.run : state.run;
     if (!run?.workspacePath || !run.changedFiles.some(file => file.path === message.path)) {
       throw new Error(`Cannot review a file outside the observed run: ${message.path}`);
     }
@@ -61,9 +71,31 @@ function activate(context) {
     await vscode.commands.executeCommand('vscode.diff', before, after, `${repoPath} · HEAD ↔ working tree`);
   }
 
+  function sendState() {
+    const selected = selectedRunId ? recentRuns.get(selectedRunId) : state;
+    if (panel) void panel.webview.postMessage({
+      ...selected,
+      recentRuns: [...recentRuns].reverse().map(([id, entry]) => ({
+        id, label: entry.run.agents[0].assignment.split('\n').find(line => line.trim()) || 'Codex run',
+        status: entry.run.status
+      })),
+      selectedRunId: selectedRunId ?? '',
+      canStop: Boolean(client)
+    });
+  }
+
   function publish(next) {
     state = next;
-    if (panel) void panel.webview.postMessage(state);
+    if (next.run) {
+      const id = JSON.stringify([next.run.rootId, next.run.turnId ?? '']);
+      recentRuns.set(id, next);
+      if (recentRuns.size > 20) {
+        const oldest = recentRuns.keys().next().value;
+        recentRuns.delete(oldest);
+        if (selectedRunId === oldest) selectedRunId = undefined;
+      }
+    }
+    sendState();
   }
 
   function stop() {
@@ -91,7 +123,16 @@ function activate(context) {
     const template = readFileSync(vscode.Uri.joinPath(media, 'panel.html').fsPath, 'utf8');
     panel.webview.html = template.replace(/{{(\w+)}}/g, (_token, key) => resources[key]);
     panel.webview.onDidReceiveMessage(message => {
-      if (message === 'ready') void panel.webview.postMessage(state);
+      if (message === 'ready') sendState();
+      else if (message?.type === 'copyReport') void copyReport().catch(error => vscode.window.showErrorMessage(`Agent Campus report failed: ${error.message}`));
+      else if (message?.type === 'start') void start();
+      else if (message?.type === 'stop') stop();
+      else if (message?.type === 'selectRun') {
+        if (message.id === '' || recentRuns.has(message.id)) {
+          selectedRunId = message.id || undefined;
+          sendState();
+        }
+      }
       else void reviewFile(message).catch(error => vscode.window.showErrorMessage(`Agent Campus file review failed: ${error.message}`));
     });
     panel.onDidDispose(() => { panel = undefined; });
@@ -115,6 +156,7 @@ function activate(context) {
     });
     if (!prompt?.trim() || client) return;
 
+    selectedRunId = undefined;
     showPanel(false);
     publish({ status: 'Connecting', run: null });
     const executable = vscode.workspace.getConfiguration('agentWorkspace').get('codexExecutable');
@@ -124,11 +166,11 @@ function activate(context) {
       const next = reduceActivity(run, method, params);
       if (next === run) return;
       run = next;
-      publish({ status: run.status, run });
       if (run.status !== 'running') {
         connection.close(new Error('Run finished.'));
         client = undefined;
       }
+      publish({ status: run.status, run });
     }, error => {
       if (client !== connection) return;
       client = undefined;
@@ -164,7 +206,7 @@ function activate(context) {
         if (client) return;
         if (turnId !== observedTurn) {
           observedTurn = turnId;
-          showPanel(true);
+          if (vscode.workspace.getConfiguration('agentWorkspace').get('autoOpen')) showPanel(true);
         }
         publish({ status: `Codex chat · ${run.status}`, run });
       }, reportError));
@@ -174,6 +216,7 @@ function activate(context) {
   }
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('agentWorkspace.open', () => showPanel(false)),
     vscode.commands.registerCommand('agentWorkspace.start', start),
     vscode.commands.registerCommand('agentWorkspace.stop', stop),
     { dispose: stop }
