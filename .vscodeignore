@@ -1,0 +1,14 @@
+.vscode/**
+.github/**
+.agents/**
+.codex/**
+.aws/**
+scripts/**
+work/**
+outputs/**
+node_modules/**
+package-lock.json
+AGENTS.md
+.gitignore
+**/*.vsix
+**/.DS_Store

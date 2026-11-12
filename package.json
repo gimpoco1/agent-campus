@@ -1,17 +1,54 @@
 {
   "name": "agent-campus",
   "displayName": "Agent Campus",
-  "version": "0.0.1",
+  "description": "Visualize Codex chats, subagents, progress, and results in a live agent campus.",
+  "publisher": "agent-campus",
+  "icon": "media/icon.png",
+  "version": "0.0.2",
   "private": true,
-  "engines": { "vscode": "^1.95.0" },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gimpoco1/agent-campus.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gimpoco1/agent-campus/issues"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "codex",
+    "agents",
+    "subagents",
+    "visualization"
+  ],
+  "engines": {
+    "vscode": "^1.95.0"
+  },
   "main": "./src/extension.cjs",
-  "activationEvents": ["onStartupFinished"],
-  "extensionKind": ["workspace"],
-  "capabilities": { "untrustedWorkspaces": { "supported": false } },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    }
+  },
   "contributes": {
     "commands": [
-      { "command": "agentWorkspace.start", "title": "Agent Campus: Start Run" },
-      { "command": "agentWorkspace.stop", "title": "Agent Campus: Stop Run" }
+      {
+        "command": "agentWorkspace.start",
+        "title": "Agent Campus: Start Run"
+      },
+      {
+        "command": "agentWorkspace.stop",
+        "title": "Agent Campus: Stop Run"
+      }
     ],
     "configuration": {
       "title": "Agent Campus",
@@ -26,8 +63,12 @@
     }
   },
   "scripts": {
+    "package": "npm test && npm run check && vsce package",
     "test": "node scripts/activity-test.cjs",
     "check": "node --check src/client.cjs && node --check src/extension.cjs && node --check src/activity.cjs && node --check src/ide-sessions.cjs && node --check media/campus.js && node --check media/panel.js",
     "smoke": "node scripts/smoke.cjs"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "4.1.0"
   }
 }
